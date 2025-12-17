@@ -256,6 +256,7 @@ async function checkWebsite(url) {
 }
 
 export default {
+  // 1. HTTP 请求处理 (Web 访问)
   async fetch(request, env) {
       const url = new URL(request.url);
       const method = request.method;
@@ -357,7 +358,7 @@ export default {
           return Response.json({ status: 'success', msg: '配置已保存' });
       }
 
-      // --- 备份/恢复逻辑 (JS 实现 Python requests) ---
+      // --- 备份/恢复逻辑 ---
 
       async function getBackupJson() {
           const { results } = await env.DB.prepare("SELECT domain_name as domain, registration_date as reg, expiration_date as exp, remark FROM Domain").all();
@@ -393,7 +394,7 @@ export default {
               
               if (gId) {
                   const r = await fetch(`https://api.github.com/gists/${gId}`, { method: 'PATCH', headers, body: JSON.stringify(payload) });
-                  if (r.status !== 200) gId = null; // ID 失效，需新建
+                  if (r.status !== 200) gId = null; 
               }
               
               if (!gId) {
@@ -429,7 +430,6 @@ export default {
           if (!conf.webdav_url) return Response.json({status:'error', msg:'无 WebDAV 配置'});
 
           const targetUrl = conf.webdav_url.replace(/\/+$/, '') + '/domains_backup.json';
-          // JS 中生成 Basic Auth
           const auth = btoa(`${conf.webdav_user}:${conf.webdav_pass}`);
           const headers = { 'Authorization': `Basic ${auth}` };
 
@@ -452,5 +452,45 @@ export default {
       }
 
       return new Response('Not Found', { status: 404 });
+  },
+
+  // 2. Cron 触发器 (新增：处理后台定时任务)
+  async scheduled(controller, env, ctx) {
+      console.log("Cron triggered: Starting background checks...");
+      
+      const { results } = await env.DB.prepare("SELECT * FROM Domain").all();
+      if (!results || results.length === 0) {
+          console.log("No domains to check.");
+          return;
+      }
+
+      // 并发执行所有检查任务，使用 Promise.all 提高速度
+      const checkTasks = results.map(async (d) => {
+          try {
+              // 检测网站状态
+              const res = await checkWebsite(d.domain_name);
+              // 重新计算剩余天数
+              const days = calcDays(d.expiration_date);
+              
+              // 更新数据库
+              await env.DB.prepare(
+                  "UPDATE Domain SET is_online=?, status_code=?, response_time=?, last_checked=?, days_to_expire=? WHERE id=?"
+              ).bind(
+                  res.online ? 1 : 0, 
+                  res.code, 
+                  res.ms, 
+                  new Date().toISOString(), 
+                  days, 
+                  d.id
+              ).run();
+              
+              console.log(`Updated ${d.domain_name}: ${res.code}`);
+          } catch (err) {
+              console.error(`Failed to check ${d.domain_name}:`, err);
+          }
+      });
+
+      // 确保 Worker 在所有任务完成前不关闭
+      ctx.waitUntil(Promise.all(checkTasks));
   }
 };

@@ -11,6 +11,7 @@
 这里是重点： 去你的 GitHub 项目里，打开 schema.sql 文件，复制里面的所有代码。
 回到 Cloudflare 的 Console 界面，把代码粘贴进去，点击 "Execute" (执行)。
 这步操作就代替了命令行的 wrangler d1 execute ...。
+
 3. 连接 Git 部署 (和截图一样)
 左侧点击 Workers & Pages -> Overview。
 点击 Create application。
@@ -20,7 +21,8 @@
 如果它问你 Build command，通常填 npm run build 或者留空（如果是纯 Worker 脚本）。
 如果项目里有 wrangler.toml，Cloudflare 通常能自动识别。
 点击 Save and Deploy。
-4. 绑定变量 (最重要的一步)
+
+5. 绑定变量 (最重要的一步)
 部署第一次可能会失败，或者部署成功但无法运行，因为还没连上数据库。
 
 部署完成后，点击进入这个 Worker/Pages 项目的 Settings (设置) -> Functions (如果是 Pages) 或 Settings -> Variables (如果是 Workers)。
@@ -30,5 +32,6 @@ D1 Database: 选择你在第 2 步创建的那个 domain-db。
 找到 Environment Variables (环境变量)。
 添加变量：PASSWORD，值填你想设置的密码。
 保存设置。
-5. 重新部署
+
+6. 重新部署
 去 Deployments 标签页，点击 Retry deployment (重试部署) 或者在 GitHub 上随便改个空格提交一下触发重新部署。
